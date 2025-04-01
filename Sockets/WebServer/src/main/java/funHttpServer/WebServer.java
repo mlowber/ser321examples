@@ -201,18 +201,39 @@ class WebServer {
           // extract path parameters
           query_pairs = splitQuery(request.replace("multiply?", ""));
 
-          // extract required fields from parameters
-          Integer num1 = Integer.parseInt(query_pairs.get("num1"));
-          Integer num2 = Integer.parseInt(query_pairs.get("num2"));
+          try {
+            String num1Str = query_pairs.get("num1");
+            String num2Str = query_pairs.get("num2");
 
-          // do math
-          Integer result = num1 * num2;
+            if (num1Str == null || num2Str == null) {
+              builder.append("HTTP/1.1 400 Bad Request\n");
+              builder.append("Content-Type: text/plain; charset=utf-8\n");
+              builder.append("\n");
+              builder.append("Missing parameters: num1 and/or num2");
+            } else {
+              int result;
+              try {
+                int num1 = Integer.parseInt(num1Str);
+                int num2 = Integer.parseInt(num2Str);
+                result = num1 * num2;
 
-          // Generate response
-          builder.append("HTTP/1.1 200 OK\n");
-          builder.append("Content-Type: text/html; charset=utf-8\n");
-          builder.append("\n");
-          builder.append("Result is: " + result);
+                builder.append("HTTP/1.1 200 OK\n");
+                builder.append("Content-Type: text/plain; charset=utf-8\n");
+                builder.append("\n");
+                builder.append("Result is: " + result);
+              } catch (NumberFormatException e) {
+                builder.append("HTTP/1.1 400 Bad Request\n");
+                builder.append("Content-Type: text/plain; charset=utf-8\n");
+                builder.append("\n");
+                builder.append("Error: num1 and num2 must be integers.");
+              }
+            }
+          } catch (Exception e) {
+            builder.append("HTTP/1.1 500 Internal Server Error\n");
+            builder.append("Content-Type: text/plain; charset=utf-8\n");
+            builder.append("\n");
+            builder.append("Server error: " + e.getMessage());
+          }
 
           // TODO: Include error handling here with a correct error code and
           // a response that makes sense
@@ -228,35 +249,128 @@ class WebServer {
 
           Map<String, String> query_pairs = new LinkedHashMap<String, String>();
           query_pairs = splitQuery(request.replace("github?", ""));
-          String json = fetchURL("https://api.github.com/" + query_pairs.get("query"));
-          System.out.println(json);
+          try {
+            String query = query_pairs.get("query");
 
-          builder.append("HTTP/1.1 200 OK\n");
-          builder.append("Content-Type: text/html; charset=utf-8\n");
-          builder.append("\n");
-          builder.append("Check the todos mentioned in the Java source file");
-          // TODO: Parse the JSON returned by your fetch and create an appropriate
-          // response based on what the assignment document asks for
+            if (query == null || query.isEmpty()) {
+              builder.append("HTTP/1.1 400 Bad Request\n");
+              builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+              builder.append("Missing 'query' parameter.");
+            } else {
+              String json = fetchURL("https://api.github.com/" + query);
+              StringBuilder html = new StringBuilder();
+              html.append("<html><body><h2>GitHub Repositories</h2><ul>");
 
-        } else {
-          // if the request is not recognized at all
+              // Very basic JSON line-by-line parsing
+              String[] lines = json.split("\\{");
+              for (String line : lines) {
+                if (line.contains("full_name") && line.contains("id") && line.contains("owner")) {
+                  String fullName = extractJsonField(line, "full_name");
+                  String id = extractJsonField(line, "id");
+                  String ownerLogin = extractJsonField(line, "login");
 
-          builder.append("HTTP/1.1 400 Bad Request\n");
-          builder.append("Content-Type: text/html; charset=utf-8\n");
-          builder.append("\n");
-          builder.append("I am not sure what you want me to do...");
+                  html.append("<li><b>").append(fullName).append("</b><br>");
+                  html.append("ID: ").append(id).append("<br>");
+                  html.append("Owner: ").append(ownerLogin).append("</li><br>");
+                }
+              }
+
+              html.append("</ul></body></html>");
+
+              builder.append("HTTP/1.1 200 OK\n");
+              builder.append("Content-Type: text/html; charset=utf-8\n\n");
+              builder.append(html.toString());
+            }
+          } catch (Exception e) {
+            builder.append("HTTP/1.1 500 Internal Server Error\n");
+            builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+            builder.append("Error occurred: " + e.getMessage());
+          }
+      } else if (request.contains("concat?")) {
+        Map<String, String> query_pairs = splitQuery(request.replace("concat?", ""));
+        try {
+          String first = query_pairs.get("first");
+          String second = query_pairs.get("second");
+
+          if (first == null || second == null) {
+            builder.append("HTTP/1.1 400 Bad Request\n");
+            builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+            builder.append("Missing parameters: first and/or second.");
+          } else {
+            builder.append("HTTP/1.1 200 OK\n");
+            builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+            builder.append("Result: " + first + " " + second);
+          }
+        } catch (Exception e) {
+          builder.append("HTTP/1.1 500 Internal Server Error\n");
+          builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+          builder.append("Server error: " + e.getMessage());
+        }
+      } else if (request.contains("average?")) {
+        Map<String, String> query_pairs = splitQuery(request.replace("average?", ""));
+        try {
+          String aStr = query_pairs.get("a");
+          String bStr = query_pairs.get("b");
+
+          if (aStr == null || bStr == null) {
+            builder.append("HTTP/1.1 400 Bad Request\n");
+            builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+            builder.append("Missing parameters: a and/or b.");
+          } else {
+            try {
+              double a = Double.parseDouble(aStr);
+              double b = Double.parseDouble(bStr);
+              double avg = (a + b) / 2.0;
+
+              builder.append("HTTP/1.1 200 OK\n");
+              builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+              builder.append("Average: " + avg);
+            } catch (NumberFormatException e) {
+              builder.append("HTTP/1.1 400 Bad Request\n");
+              builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+              builder.append("Parameters a and b must be numbers.");
+            }
+          }
+        } catch (Exception e) {
+          builder.append("HTTP/1.1 500 Internal Server Error\n");
+          builder.append("Content-Type: text/plain; charset=utf-8\n\n");
+          builder.append("Server error: " + e.getMessage());
         }
 
-        // Output
-        response = builder.toString().getBytes();
+      } else {
+        // if the request is not recognized at all
+        builder.append("HTTP/1.1 400 Bad Request\n");
+        builder.append("Content-Type: text/html; charset=utf-8\n");
+        builder.append("\n");
+        builder.append("I am not sure what you want me to do...");
       }
+
+      // Output
+      response = builder.toString().getBytes();
+    }
     } catch (IOException e) {
       e.printStackTrace();
       response = ("<html>ERROR: " + e.getMessage() + "</html>").getBytes();
     }
 
+
     return response;
   }
+
+  private String extractJsonField(String json, String field) {
+    try {
+      int index = json.indexOf("\"" + field + "\"");
+      if (index == -1) return "N/A";
+      int colon = json.indexOf(":", index);
+      int comma = json.indexOf(",", colon);
+      if (comma == -1) comma = json.length();
+      String value = json.substring(colon + 1, comma).trim().replace("\"", "");
+      return value;
+    } catch (Exception e) {
+      return "Error";
+    }
+  }
+
 
   /**
    * Method to read in a query and split it up correctly
